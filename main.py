@@ -1,5 +1,4 @@
 import pygame
-from pygame.examples.go_over_there import screen
 
 # initialize pygame
 pygame.init()
@@ -25,7 +24,7 @@ def player(x, y):
 # game loop
 running = True
 while running:
-    screen.fill((0, 0, 0))
+    screen.fill((0, 0, 255))
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
