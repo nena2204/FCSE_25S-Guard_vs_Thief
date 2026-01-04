@@ -220,19 +220,19 @@ class Guard(pygame.sprite.Sprite):
         self.time_budget_s = 0.020  # ~20ms per guard move on HARD
         self.quiescence_bonus = 2    # extend depth when tactically hot
 
-        # Eval weights (guard-perspective; повисоко = подобро за guard)
-        self.W_BLOCKED = 300          # ако патеката Player→Treasure е блокирана (None)
-        self.W_P_PATH = -40           # казна по должина на патеката Player→Treasure (колку е подолга - подобро за guard)
-        self.W_INTERCEPT = 12         # колку наградуваме порано пресретнување
-        self.W_PRESSURE = -8          # држи го guard блиску до player
-        self.W_RING = 20              # ring бонус околу treasure кога player е близу
-        self.W_LOS_PEN = 25           # казна ако player има чист LoS кон treasure
-        self.W_COVER_BONUS = 15       # бонус ако guard ја „кине“ линијата на видливост кон player
+        # Eval weights 
+        self.W_BLOCKED = 300          
+        self.W_P_PATH = -40           
+        self.W_INTERCEPT = 12         
+        self.W_PRESSURE = -8          
+        self.W_RING = 20              
+        self.W_LOS_PEN = 25           
+        self.W_COVER_BONUS = 15       
 
-        # мал cache за најкратки патеки во иста тура (брзина)
+        
         self._sp_cache = {}
 
-    # ---- Utils ----
+    # Utils 
     def manhattan(self, a, b):
         return abs(a[0]-b[0]) + abs(a[1]-b[1])
 
@@ -271,7 +271,7 @@ class Guard(pygame.sprite.Sprite):
         return None
 
     def shortest_path_len(self, start, goal, extra_blocked=None):
-        # кеширање на резултатот за тековната пресметка
+        
         key = (start, goal, tuple(sorted(extra_blocked or ())))
         if key in self._sp_cache:
             return self._sp_cache[key]
@@ -280,7 +280,7 @@ class Guard(pygame.sprite.Sprite):
         self._sp_cache[key] = val
         return val
 
-    # ---- Line of Sight / Raycast ----
+    # Line of Sight / Raycast 
     def _bresenham_line(self, a, b):
         """Клетки по линија (вклучувајќи старт/цел) со Bresenham 4-соседи."""
         (x0, y0), (x1, y1) = a, b
@@ -299,7 +299,7 @@ class Guard(pygame.sprite.Sprite):
         return out
 
     def has_line_of_sight(self, a, b):
-        """Вистински LoS ако нема бариери на линијата (освен крајните клетки)."""
+        
         for cell in self._bresenham_line(a, b):
             if cell == a or cell == b:
                 continue
@@ -311,7 +311,7 @@ class Guard(pygame.sprite.Sprite):
         """Дали target е 'покриен' (без LoS) од observer."""
         return not self.has_line_of_sight(target, observer)
 
-    # ---- Move gens ----
+    # Move gens 
     def get_guard_moves(self, pos, player_pos):
         moves = []
         for q in self.neighbors4(pos):
@@ -329,13 +329,13 @@ class Guard(pygame.sprite.Sprite):
             if q in self.barriers:
                 continue
             if q == guard_pos:
-                # walking into guard would be immediate capture – assume rational player avoids
+                # walking into guard would be immediate capture 
                 continue
             # player IS allowed to step onto treasure
             moves.append(q)
         return moves
 
-    # ---- Evaluation ----
+   
     def evaluate(self, g, p):
         # Терминали
         if g == p:
@@ -343,14 +343,14 @@ class Guard(pygame.sprite.Sprite):
         if p == TREASURE_POS:
             return -1_000_000
 
-        # 1) Патека на player до treasure, третирајќи ја guard-клетката како блокирана
+        # 1)  player to treasure
         p_path_len = self.shortest_path_len(p, TREASURE_POS, extra_blocked={g})
         if p_path_len is None:
             block_term = self.W_BLOCKED
         else:
             block_term = self.W_P_PATH * p_path_len
 
-        # 2) Интерцепција: колку порано guard ја среќава player-патеката до treasure
+        # 2)колку порано guard ја среќава player-патеката до treasure
         p_path = self.bfs_path(p, TREASURE_POS)
         intercept_term = 0
         if p_path is not None:
@@ -361,10 +361,10 @@ class Guard(pygame.sprite.Sprite):
                     best_margin = margin
             intercept_term = self.W_INTERCEPT * (-best_margin)
 
-        # 3) Притисок: држи се блиску до player
+        # 3) pressure: near player
         pressure = self.W_PRESSURE * self.manhattan(g, p)
 
-        # 4) Treasure ring: ако player е блиску до treasure, награда да бидеме и ние блиску
+        # 4) Treasure ring: if player е near treasure, award i nie da sme blisku
         p_to_t = self.manhattan(p, TREASURE_POS)
         ring_bonus = 0
         if p_to_t <= 3:
@@ -374,13 +374,13 @@ class Guard(pygame.sprite.Sprite):
         los_guard_to_player = self.has_line_of_sight(g, p)
         cover_bonus = self.W_COVER_BONUS if not los_guard_to_player else 0
 
-        # казна ако player има чиста LoS кон treasure (брз спринт)
+        # kazna ako player ima clean LoS to treasure 
         los_player_to_treasure = self.has_line_of_sight(p, TREASURE_POS)
         los_penalty = -self.W_LOS_PEN if los_player_to_treasure else 0
 
         return block_term + intercept_term + pressure + ring_bonus + cover_bonus + los_penalty
 
-    # ---- Quiescence trigger ----
+    #  Quiescence trigger
     def is_tactical(self, g, p):
         return (
             self.manhattan(g, p) <= 2
@@ -391,14 +391,14 @@ class Guard(pygame.sprite.Sprite):
     # ---- Move ordering ----
     def order_guard_moves(self, moves, g, p):
         def key(m):
-            # Prefer moves што го продолжуваат патот на player до treasure,
-            # ја кинат LoS, се доближуваат до player и до прстенот околу treasure
+            # Prefer moves which => player to treasure,
+            
             p_len_after = self.shortest_path_len(p, TREASURE_POS, extra_blocked={m})
             if p_len_after is None:
                 pen = -999  # strongest (best for guard)
             else:
                 pen = p_len_after
-            los_break = 0 if self.has_line_of_sight(m, p) else -1  # претпочитај да нема LoS
+            los_break = 0 if self.has_line_of_sight(m, p) else -1  
             ring_dist = self.manhattan(m, TREASURE_POS)
             return (
                 pen,
@@ -413,13 +413,13 @@ class Guard(pygame.sprite.Sprite):
             return (self.manhattan(m, TREASURE_POS), -self.manhattan(m, g))
         return sorted(moves, key=key)
 
-    # ---- Alpha-Beta with iterative deepening ----
+    # Alpha-Beta with iterative deepening 
     def alphabeta(self, g, p, depth, alpha, beta, maximizing, start_time, time_budget, tt, qdepth=0):
         # Time cutoff
         if time.perf_counter() - start_time > time_budget:
             return self.evaluate(g, p), None, True  # (value, move, timed_out)
 
-        # Terminal or depth (with bounded quiescence)
+        # Terminal or depth 
         if depth == 0 or g == p or p == TREASURE_POS:
             # Quiescence: extend ONLY a limited number of extra plies
             if depth == 0 and qdepth > 0 and self.is_tactical(g, p):
@@ -431,7 +431,6 @@ class Guard(pygame.sprite.Sprite):
         key = (g, p, depth, maximizing)
         if key in tt:
             val, mv, flag = tt[key]
-            # For simplicity we just reuse stored value; flags omitted for clarity
             return val, mv, False
 
         if maximizing:
@@ -503,7 +502,7 @@ class Guard(pygame.sprite.Sprite):
         self.grid_pos = best_move
         self.rect.topleft = (best_move[0] * TILE_SIZE, best_move[1] * TILE_SIZE)
 
-    # ---- Expectimax (chance over player moves via softmax) ----
+    # Expectimax (chance over player moves via softmax) 
     def expectimax(self, g, p, depth, maximizing, start_time, time_budget, cache):
         if time.perf_counter() - start_time > time_budget:
             return self.evaluate(g, p), None, True
@@ -533,7 +532,6 @@ class Guard(pygame.sprite.Sprite):
             moves = self.get_player_moves(p, g)
             if not moves:
                 return self.evaluate(g, p), None, False
-            # Softmax over (closer to treasure, farther from guard)
             logits = []
             for mv in moves:
                 toward_t = -self.manhattan(mv, TREASURE_POS)
@@ -555,7 +553,7 @@ class Guard(pygame.sprite.Sprite):
             return cache[key]
 
     def move_expectimax(self, player_pos):
-        # reset локален cache за оваа пресметка
+        # reset local cache
         self._sp_cache.clear()
 
         start = time.perf_counter()
@@ -564,7 +562,7 @@ class Guard(pygame.sprite.Sprite):
         best_move = None
         best_val = float('-inf')
 
-        # Iterative deepening on depth as well (lower than AB)
+        # Iterative deepening on depth as well
         for depth in range(2, 8):
             val, mv, to = self.expectimax(self.grid_pos, player_pos, depth, True, start, time_budget, cache)
             if to:
@@ -580,7 +578,7 @@ class Guard(pygame.sprite.Sprite):
         self.grid_pos = best_move
         self.rect.topleft = (best_move[0] * TILE_SIZE, best_move[1] * TILE_SIZE)
 
-    # ---- Simple baselines ----
+    # Simple baselines
     def bfs_shortest_path(self, start, goal):
         # kept for EASY greedy
         return self.bfs_path(start, goal)
@@ -618,7 +616,7 @@ class Guard(pygame.sprite.Sprite):
                 self.rect.topleft = (nx * TILE_SIZE, ny * TILE_SIZE)
                 break
 
-    # ---- Difficulty switch ----
+    #Difficulty switch 
     def move(self, player_pos):
         if self.difficulty == "EASY":
             self.move_greedy(player_pos)
